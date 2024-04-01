@@ -2,6 +2,7 @@ package org.todolist;
 
 import org.todolist.config.RunMode;
 import org.todolist.controller.TaskController;
+import org.todolist.service.DatabaseOperations;
 
 import java.io.IOException;
 
