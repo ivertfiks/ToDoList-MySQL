@@ -13,10 +13,10 @@ public class FileOperations {
         this.taskService = taskService;
     }
 
-    public void writeInFile(TaskService taskService) throws IOException {
+    public void writeInFile(TaskService taskService, String fileName) throws IOException {
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder.append("id;").append("name;").append("taskPriority").append("\n");
-        File csvFile = new File("task.csv");
+        File csvFile = new File(fileName);
         try (FileWriter fileWriter = new FileWriter(csvFile)) {
             for (Task task : taskService.getTaskList()) {
                 stringBuilder.append(task.getId());
