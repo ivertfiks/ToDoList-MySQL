@@ -1,28 +1,51 @@
-package org.todolist.service;
+package org.todolist.service.database;
 
 import org.todolist.exceptions.BusinessException;
 import org.todolist.exceptions.enum_exception.BusinessExceptionReason;
+import org.todolist.model.Task;
 import org.todolist.model.enum_model.TaskPriority;
 import org.todolist.model.enum_model.TaskStatus;
+import org.todolist.service.TaskService;
+import org.todolist.service.files.TaskListService;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.sql.*;
+import java.util.List;
+import java.util.Properties;
 
 public class DatabaseOperations {
+    private static TaskListService taskListService;
     private static DatabaseOperations instance;
     private static Connection connection;
+    private static String DB_URL;
+    private static String DB_USER;
+    private static String DB_PASSWORD;
 
-    private DatabaseOperations(String address, String userName, String password) throws SQLException {
+
+    private DatabaseOperations() throws SQLException {
+        DatabaseOperations.taskListService = new TaskListService();
+        Properties props = new Properties();
         try {
-            connection = DriverManager.getConnection("jdbc:mysql://"+ address +"/?user="+ userName +"&password=" + password);
+            props.load(new FileInputStream(".env"));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        DB_URL = props.getProperty("DB_URL");
+        DB_USER = props.getProperty("DB_USER");
+        DB_PASSWORD = props.getProperty("DB_PASSWORD");
+        try {
+            connection = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
             System.out.println("Connection success");
         } catch (SQLException e) {
             throw new BusinessException(BusinessExceptionReason.FAILED_DATABASE_CONNECTION_EXCEPTION.getCommandName());
         }
     }
 
-    public static DatabaseOperations getInstance(String address, String userName, String password) throws SQLException {
+    public static DatabaseOperations getInstance() throws SQLException {
         if (instance == null) {
-            instance = new DatabaseOperations(address, userName, password);
+            instance = new DatabaseOperations();
         }
         return instance;
     }
@@ -31,9 +54,8 @@ public class DatabaseOperations {
         return connection;
     }
 
-    public void addTask(String tableName, String description, String taskPriority, String taskStatus) throws SQLException {
-        String sqlCommand = "INSERT INTO "+ tableName +".tasks (Title, TaskPriority, TaskStatus) VALUES (?,?,?)";
-        try (PreparedStatement statement = connection.prepareStatement(sqlCommand)) {
+    public void addTask(String description, String taskPriority, String taskStatus) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(DatabaseQueries.INSERT_INTO_TABLE)) {
             statement.setString(1, description);
             statement.setString(2, taskPriority);
             statement.setString(3, taskStatus);
@@ -44,7 +66,7 @@ public class DatabaseOperations {
     }
 
     public void deleteTask(String tableName, int taskId) throws SQLException {
-        String sqlCommand = "DELETE FROM "+ tableName +".tasks WHERE Id = ?;";
+        String sqlCommand = DatabaseQueries.DELETE_FROM_TABLE_ID;
         try (PreparedStatement statement = connection.prepareStatement(sqlCommand)) {
             statement.setInt(1, taskId);
             statement.executeUpdate();
@@ -56,7 +78,7 @@ public class DatabaseOperations {
     }
 
     private void updateIdAfterTaskDelete(String tableName, int taskId) throws SQLException {
-        String sqlCommand = "UPDATE "+ tableName +".tasks SET Id = Id - 1 WHERE Id > ?;";
+        String sqlCommand = DatabaseQueries.UPDATE_AFTER_DELETE;
         try (PreparedStatement statement = connection.prepareStatement(sqlCommand)) {
             statement.setInt(1, taskId);
             statement.executeUpdate();
@@ -66,7 +88,7 @@ public class DatabaseOperations {
     }
 
     private void autoIncrementUpdate(String tableName) throws SQLException {
-        String sqlCommand = "SELECT COUNT(*) FROM "+ tableName +".tasks";
+        String sqlCommand = DatabaseQueries.SELECT_COUNT_FROM_TABLE;
         int rowCount;
         try (PreparedStatement countStatement = connection.prepareStatement(sqlCommand)) {
             try (ResultSet resultSet = countStatement.executeQuery()) {
@@ -79,7 +101,7 @@ public class DatabaseOperations {
         } catch (SQLException e) {
             throw new BusinessException(BusinessExceptionReason.SQL_UPDATE_AUTO_INCREMENT_EXCEPTION.getCommandName());
         }
-        sqlCommand = "ALTER TABLE "+ tableName +".tasks AUTO_INCREMENT = ?";
+        sqlCommand = DatabaseQueries.ALTER_TABLE_AUTO_INCREMENT;
         try (PreparedStatement alterStatement = connection.prepareStatement(sqlCommand)) {
             alterStatement.setInt(1, rowCount + 1);
             alterStatement.executeUpdate();
@@ -89,7 +111,7 @@ public class DatabaseOperations {
     }
 
     public void updateTask(String tableName, int taskId, String title, TaskPriority taskPriority, TaskStatus taskStatus) throws SQLException {
-        String sqlCommand = "UPDATE "+ tableName +".tasks SET Title = ?, TaskPriority = ?, TaskStatus = ?  WHERE id = ?";
+        String sqlCommand = DatabaseQueries.UPDATE_TASK_ALL_PARAMETERS;
         try (PreparedStatement statement = connection.prepareStatement(sqlCommand)) {
             statement.setString(1, title);
             statement.setString(2, String.valueOf(taskPriority));
@@ -102,7 +124,7 @@ public class DatabaseOperations {
     }
 
     public void updateTask(String tableName, int taskId, TaskStatus taskStatus) throws SQLException {
-        String sqlCommand = "UPDATE "+ tableName +".tasks SET TaskStatus = ? WHERE id = ?";
+        String sqlCommand = DatabaseQueries.UPDATE_TASK_TASK_STATUS;
         try (PreparedStatement statement = connection.prepareStatement(sqlCommand)) {
             statement.setString(1, String.valueOf(taskStatus));
             statement.setInt(2, taskId);
@@ -113,7 +135,7 @@ public class DatabaseOperations {
     }
 
     public void updateTask(String tableName, int taskId, TaskPriority taskPriority) throws SQLException {
-        String sqlCommand = "UPDATE "+ tableName +".tasks SET TaskPriority = ? WHERE id = ?";
+        String sqlCommand = DatabaseQueries.UPDATE_TASK_TASK_PRIORITY;
         try (PreparedStatement statement = connection.prepareStatement(sqlCommand)) {
             statement.setString(1, String.valueOf(taskPriority));
             statement.setInt(2, taskId);
@@ -123,14 +145,17 @@ public class DatabaseOperations {
         }
     }
 
-    public void printTasks(String tableName) throws SQLException {
-        String sqlCommand = "SELECT * FROM "+ tableName +".tasks";
+    public List<Task> convertTaskInList(String tableName) throws SQLException {
+        String sqlCommand = DatabaseQueries.SELECT_ALL_FROM_TABLE;
         try (Statement statement = connection.prepareStatement(sqlCommand)) {
             ResultSet resultSet = statement.executeQuery(sqlCommand);
             while (resultSet.next()) {
-                System.out.println(resultSet.getInt("Id") + ": " + resultSet.getString("Title") + ", " + resultSet.getString("TaskPriority")
-                        + ", " + resultSet.getString("TaskStatus"));
+                taskListService.addTask(new Task(resultSet.getInt("Id"),
+                        resultSet.getString("Title"),
+                        TaskPriority.valueOf(resultSet.getString("TaskPriority")),
+                        TaskStatus.valueOf(resultSet.getString("TaskStatus"))));
             }
+            return taskListService.getTaskList();
         } catch (SQLException e) {
             throw new BusinessException(BusinessExceptionReason.SQL_GET_TASK_EXCEPTION.getCommandName());
         }

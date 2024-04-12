@@ -12,7 +12,7 @@ public enum TaskStatus {
 
     String status;
 
-    public String getPriority() {
+    public String getStatus() {
         return status;
     }
 }

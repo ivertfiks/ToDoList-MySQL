@@ -1,10 +1,5 @@
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.todolist.model.enum_model.TaskPriority;
-import org.todolist.model.enum_model.TaskStatus;
-import org.todolist.service.DatabaseOperations;
-import org.todolist.view.enum_view.UserCommands;
 
 import java.sql.SQLException;
 

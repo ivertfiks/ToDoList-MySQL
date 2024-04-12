@@ -4,7 +4,6 @@ import org.todolist.exceptions.DuplicateTaskException;
 import org.todolist.model.Task;
 import org.todolist.model.enum_model.TaskPriority;
 import org.todolist.model.enum_model.TaskStatus;
-import org.todolist.service.FileOperations;
 import org.todolist.service.TaskService;
 
 import java.io.FileNotFoundException;
